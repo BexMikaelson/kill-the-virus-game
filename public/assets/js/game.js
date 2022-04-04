@@ -11,6 +11,7 @@ const messageEl = document.querySelector('#message');
 let room = null;
 let username = null;
 
+
 const addMessageToChat = (message, ownMsg = false) => {
 	// create new `li` element
 	const liEl = document.createElement('li');
@@ -45,6 +46,28 @@ const addNoticeToChat = notice => {
 
 	messagesEl.appendChild(liEl);
 	liEl.scrollIntoView();
+}
+// handels points
+const addPointsToCurrentUser = (points, time) => {
+	const pointEl = document.querySelector('[data-your-score]');
+	const timeEl = document.querySelector('#time');
+	pointEl.textContent = points;
+	timeEl.textContent = time
+}
+
+const addPointsToEnemyUser = (points, time) => {
+	const pointEl = document.querySelector('[data-computer-score]');
+	const timeEl = document.querySelector('#enemy-time');
+	pointEl.textContent = points
+	timeEl.textContent = time
+}
+
+const addPoints = (user, points, time) => {
+	if (user === username) {
+		addPointsToCurrentUser(points, time)
+	} else {
+		addPointsToEnemyUser(points, time)
+	}
 }
 
 // update user list
@@ -88,13 +111,18 @@ socket.on('reconnect', () => {
 });
 
 socket.on('damageDone', (username, time, row, column) => {
-	addNoticeToChat(`Damage done from ${username} in ${time}`);
 	makeVirus(row, column);
 })
 
-socket.on('room:points', (username, userpoint, row, column) => {
-	addNoticeToChat(`Damage done from ${username} in ${userpoint}`);
+
+// Test randomize makes virus jump all the time
+socket.on('room:randomize', (row, column) => {
 	makeVirus(row, column);
+})
+
+socket.on('room:point', (username, userpoint, time) => {
+	addNoticeToChat(`Damage done from ${username} in ${userpoint}`);
+	addPoints(username, userpoint, time);
 })
 
 // listen for incoming messages
@@ -163,10 +191,7 @@ messageForm.addEventListener('submit', e => {
 	messageEl.focus();
 });
 
-/**
- * 
- * Heidi och Malin
- */
+
 
  "use strict";  
  //const socket = io();
@@ -227,6 +252,30 @@ const changeVirusPosition = (row, column) => {
  
  
  makeVirus(2,2);
+
+//  let userScore = 10;
+//  let computerScore = 10;
+let userPoint = 0
+
+
+ function endGame() {
+    if (userPoint === 10) {
+        console.log("Game Over! You Win! :)");
+    } 
+}
+
+function game() {
+    
+    if(userPoint < 10){
+    	game();
+    }
+    else{
+    	endGame();
+    }
+}
+
+
+game();
 
 
 
