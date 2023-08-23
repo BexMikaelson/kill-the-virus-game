@@ -31,6 +31,11 @@ const rooms = [
   },
 ];
 
+ 
+
+
+
+
 const handleDisconnect = function () {
   debug(`Client ${this.id} disconnected :(`);
 
@@ -68,6 +73,8 @@ const handleUserJoined = function (username, room_id, callback) {
   // b) add socket to room's `users` object
   room.users[this.id] = username;
 
+  
+
   // let everyone know that someone has connected to the chat
   this.broadcast.to(room.id).emit("user:connected", username);
 
@@ -84,7 +91,7 @@ const handleUserJoined = function (username, room_id, callback) {
 
 // Handle when a user has joined the chat
 const handleUserFire = function (username, room_id, time) {
-  // debug(`User ${username} with socket id ${this.id} wants to join room '${room_id}'`);
+   debug(`User ${username} with socket id ${this.id} wants to join room '${room_id}'`);
   function randomColumnRow() {
     return Math.ceil(Math.random() * 8);
   }
@@ -135,15 +142,15 @@ const handleUserFire = function (username, room_id, time) {
 };
 
 // Test Randomize makes virus jump all the time
-const randomize = function (username, room_id, time) {
-  function randomColumnRow() {
-    return Math.ceil(Math.random() * 8);
-  }
-  const row = randomColumnRow();
-  const column = randomColumnRow();
-  io.to('room1').emit("room:randomize", row, column);
-  io.to('room2').emit("room:randomize", row, column);
-};
+// const randomize = function (username, room_id, time) {
+//   function randomColumnRow() {
+//     return Math.ceil(Math.random() * 8);
+//   }
+//   const row = randomColumnRow();
+//   const column = randomColumnRow();
+//   io.to('room1').emit("room:randomize", row, column);
+//   io.to('room2').emit("room:randomize", row, column);
+// };
 
 const handleChatMessage = function (message) {
   debug("Someone said something: ", message);
@@ -175,8 +182,8 @@ module.exports = function (socket, _io) {
 
 
 	// test  Randomize makes virus jump all the time controles the time
-	const speedToMakeVirus = 6000;
-	setInterval(() => {
-		randomize()
-	}, speedToMakeVirus)
+	// const speedToMakeVirus = 6000;
+	// setInterval(() => {
+	// 	randomize()
+	// }, speedToMakeVirus)
 };

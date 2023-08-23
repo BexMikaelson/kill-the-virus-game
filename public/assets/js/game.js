@@ -1,6 +1,7 @@
 const socket = io();
 
 const startEl = document.querySelector('#start');
+const waitingEl = document.querySelector('#waiting-screen')
 const chatWrapperEl = document.querySelector('#game-wrapper');
 const usernameForm = document.querySelector('#username-form');
 const messagesEl = document.querySelector('#messages'); // ul element containing all messages
@@ -74,6 +75,19 @@ const addPoints = (user, points, time) => {
 const updateUserList = users => {
 	document.querySelector('#online-users').innerHTML =
 		Object.values(users).map(username => `<li><span class="fa-solid fa-user-astronaut"></span> ${username}</li>`).join("");
+		console.log(users);
+		if (Object.keys(users).length == 2){
+			console.log("Two players!");
+			bothusers=users;
+			
+        //hide waiting view
+        waitingEl.classList.add('hide');
+		//show game view 
+        chatWrapperEl.classList.remove('hide');
+		// startEl.classList.remove('hide')
+		//  makeVirus()
+		socket.emit("user:startgame", session, socket.id);
+		}
 }
 
 // listen for when a new user connects
@@ -120,17 +134,17 @@ socket.on('room:randomize', (row, column) => {
 	makeVirus(row, column);
 })
 
-socket.on('room:point', (username, userpoint, time) => {
+ socket.on('room:point', (username, userpoint, time) => {
 	addNoticeToChat(`Damage done from ${username} in ${userpoint}`);
-	addPoints(username, userpoint, time);
-})
+ 	addPoints(username, userpoint, time);
+ })
 
-// listen for incoming messages
-socket.on('chat:message', message => {
-	console.log("Someone said something:", message);
+ // listen for incoming messages
+ socket.on('chat:message', message => {
+ 	console.log("Someone said something:", message);
 
 	addMessageToChat(message);
-});
+ });
 
 // get username and room from form and emit `user:joined` and then show chat
 usernameForm.addEventListener('submit', e => {
@@ -143,24 +157,37 @@ usernameForm.addEventListener('submit', e => {
 
 	// emit `user:joined` event and when we get acknowledgement, THEN show the chat
 	socket.emit('user:joined', username, room, (status) => {
+		
 		// we've received acknowledgement from the server
 		console.log("Server acknowledged that user joined", status);
 
 		if (status.success) {
-			// hide start view
+			
+			// // // hide start view
 			startEl.classList.add('hide');
+
 
 			// show chat view
 			chatWrapperEl.classList.remove('hide');
 
+			
+
 			// set room name as chat title chat-title
 			document.querySelector('#room').innerText = status.roomName;
+
+			
 
 			// focus on inputMessage
 			messageEl.focus();
 
 			// update list of users in room
 			updateUserList(status.users);
+
+			if (!status.start) {
+                waitingEl.classList.remove("hide");
+            } 
+
+			
 		}
 	});
 });
@@ -255,27 +282,27 @@ const changeVirusPosition = (row, column) => {
 
 //  let userScore = 10;
 //  let computerScore = 10;
-let userPoint = 0
+// let userPoint = 0
 
 
- function endGame() {
-    if (userPoint === 10) {
-        console.log("Game Over! You Win! :)");
-    } 
-}
+//  function endGame() {
+//     if (userPoint === 10) {
+//         console.log("Game Over! You Win! :)");
+//     } 
+// }
 
-function game() {
+// function game() {
     
-    if(userPoint < 10){
-    	game();
-    }
-    else{
-    	endGame();
-    }
-}
+//     if(userPoint < 10){
+//     	game();
+//     }
+//     else{
+//     	endGame();
+//     }
+// }
 
 
-game();
+// game();
 
 
 
