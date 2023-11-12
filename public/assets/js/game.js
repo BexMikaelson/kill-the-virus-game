@@ -1,312 +1,186 @@
 const socket = io();
 
 const startEl = document.querySelector('#start');
-const waitingEl = document.querySelector('#waiting-screen')
-const chatWrapperEl = document.querySelector('#game-wrapper');
-const usernameForm = document.querySelector('#username-form');
-const messagesEl = document.querySelector('#messages'); // ul element containing all messages
-const messageForm = document.querySelector('#message-form');
-const messageEl = document.querySelector('#message');
+const gameWrapperEl = document.querySelector('#game-wrapper');
+const usernameFormEl = document.querySelector('#username-form');
+const gameboardEl = document.querySelector('#game-board');
+const waitingEl = document.querySelector('#waiting');
+const scoreEl = document.querySelector('#score');
+const reactionTimeEl = document.querySelector('#reaction');
+const timerEl = document.querySelector('#timer');
+const endGameEl = document.querySelector('#endgame');
+const endGameTextEl = document.querySelector('#endgametext');
+const playAgainEl = document.querySelector('#playAgain');
 
+const gameboard = [
+    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+]
 
-let room = null;
-let username = null;
+const renderGame = (session) => {
+    waitingEl.classList.add("hide");
 
+    gameWrapperEl.classList.remove("hide");
 
-const addMessageToChat = (message, ownMsg = false) => {
-	// create new `li` element
-	const liEl = document.createElement('li');
-
-	// set class of `li` to `message`
-	liEl.classList.add('message');
-
-	if (ownMsg) {
-		liEl.classList.add('you');
-	}
-
-	// get human readable time
-	const time = moment(message.timestamp).format('HH:mm:ss');
-
-	// set content of `li` element
-	liEl.innerHTML = ownMsg
-		? message.content
-		: `<span class="user">${message.username}</span><span class="content">${message.content}</span><span class="time">${time}</span>`;
-
-	// append `li` element to `#messages`
-	messagesEl.appendChild(liEl);
-
-	// scroll `li` element into view
-	liEl.scrollIntoView();
+    socket.emit("user:startgame", session, socket.id);
 }
 
-const addNoticeToChat = notice => {
-	const liEl = document.createElement('li');
-	liEl.classList.add('notice');
-
-	liEl.innerText = notice;
-
-	messagesEl.appendChild(liEl);
-	liEl.scrollIntoView();
-}
-// handels points
-const addPointsToCurrentUser = (points, time) => {
-	const pointEl = document.querySelector('[data-your-score]');
-	const timeEl = document.querySelector('#time');
-	pointEl.textContent = points;
-	timeEl.textContent = time
-}
-
-const addPointsToEnemyUser = (points, time) => {
-	const pointEl = document.querySelector('[data-computer-score]');
-	const timeEl = document.querySelector('#enemy-time');
-	pointEl.textContent = points
-	timeEl.textContent = time
-}
-
-const addPoints = (user, points, time) => {
-	if (user === username) {
-		addPointsToCurrentUser(points, time)
-	} else {
-		addPointsToEnemyUser(points, time)
-	}
-}
-
-// update user list
-const updateUserList = users => {
-	document.querySelector('#online-users').innerHTML =
-		Object.values(users).map(username => `<li><span class="fa-solid fa-user-astronaut"></span> ${username}</li>`).join("");
-		console.log(users);
-		if (Object.keys(users).length == 2){
-			console.log("Two players!");
-			bothusers=users;
-			
-        //hide waiting view
-        waitingEl.classList.add('hide');
-		//show game view 
-        chatWrapperEl.classList.remove('hide');
-		// startEl.classList.remove('hide')
-		//  makeVirus()
-		socket.emit("user:startgame", session, socket.id);
-		}
-}
-
-// listen for when a new user connects
-socket.on('user:connected', (username) => {
-	addNoticeToChat(`${username} connected 🥳`);
+socket.on("user:connected", (username) => {
+    console.log(`${username} connected 🥳`);
 });
 
-// listen for when a user disconnects
-socket.on('user:disconnected', (username) => {
-	addNoticeToChat(`${username} disconnected 😢`);
+socket.on("user:disconnected", (username) => {
+    console.log(`${username} disconnected 😢`);
+
+    endGameEl.classList.remove("hide");
+    endGameTextEl.innerHTML = `${username} disconnected :(`;
+    playAgainEl.innerHTML = "Try again?";
+
+    playAgainEl.addEventListener("click", () => {
+        window.location.reload();
+    })
 });
 
-// listen for when we receive an updated list of online users (in this room)
-socket.on('user:list', users => {
-	updateUserList(users);
+socket.on("user:session", (username, session, startGame) => {
+    console.log(`${username} joined session ${session}`);
+
+    if (startGame) {
+        renderGame(session);
+    }
+});
+
+socket.on("game:success", data => {
+
+    let i = 1;
+
+    if (data.success) {
+        gameboardEl.innerHTML = gameboard.map(y => 
+            `<div class="row" data-y="${i}">
+            ${i++,
+                y.map(x => 
+                    `<div class="col" data-x="${x}">
+                        
+                    </div>`
+                ).join('')
+            }
+            </div>`
+        ).join('')
+
+        let cords = document.querySelector(`[data-y="${data.y}"] [data-x="${data.x}"]`);
+
+        setTimeout(() => {
+            var start = Date.now();
+
+            cords.addEventListener("click", e => {
+                var reactionTime = Date.now() - start;
+                clicked = true;
+
+                cords.classList.remove("virus");
+                socket.emit("game:point", reactionTime, socket.id, data.session);
+            })
+            cords.classList.add("virus");
+        }, data.time)
+    }
 })
 
-// listen for when we're disconnected
-socket.on('disconnect', (reason) => {
-	if (reason === 'io server disconnect') {
-		// reconnect to the server
-		socket.connect();
-	}
-	addNoticeToChat(`You were disconnected. Reason: ${reason} 😳`);
-});
+socket.on("game:result", (winner, points, keepRunning, session) => {
+    console.log(points);
+    console.log(reactionTimeEl)
 
-// listen for when we're reconnected
-socket.on('reconnect', () => {
-	// join room? but only if we were in the chat previously
-	if (username) {
-		socket.emit('user:joined', username, room, (status) => {
-			addNoticeToChat(`You reconnected 🥳`);
-		});
-	}
-});
+    if (points.player1 === socket.id) {
+        scoreEl.innerHTML = `
+            <span>${points.player1Points}</span>
+                -
+            <span>${points.player2Points}</span>
+        `
+        timerEl.innerHTML = ''
+        reactionTimeEl.innerHTML = `
+            <span>${points.player1Name } - ${points.player1React} ms</span>
+                -
+            <span>${points.player2Name} - ${points.player2React} ms</span>
+        `
+    } else {
+        scoreEl.innerHTML= `
+            <span>${points.player2Points}</span>
+                -
+            <span>${points.player1Points}</span>
+        `
+        timerEl.innerHTML= '';
+        reactionTimeEl.innerHTML= `
+            <span>${points.player2Name} - ${points.player2React} ms</span>
+            <br />
+            <span>${points.player1Name} - ${points.player1React} ms</span>
+        `
+    }
 
-socket.on('damageDone', (username, time, row, column) => {
-	makeVirus(row, column);
+    if (keepRunning) {
+        winner = socket.id ? console.log("you won") : console.log("you lost");
+
+        setTimeout(() => {
+            console.log("new round");
+            renderGame(session);
+        }, 2000)
+    } else {
+        console.log("game over");
+        socket.emit("game:end", session, socket.id);
+    }
 })
 
+socket.on("game:endresult", (winnerGame, session) => {
+    if (winnerGame === socket.id) {
+        endGameEl.classList.remove("hide");
+        endGameTextEl.innerHTML = `
+            <div class="alert alert-info">Winner</div>
+        `
+    } else {
+        endGameEl.classList.remove("hide");
+        endGameTextEl.innerHTML = `
+            <div class="alert alert-danger">Loser</div>
+        `
+    }
 
-// Test randomize makes virus jump all the time
-socket.on('room:randomize', (row, column) => {
-	makeVirus(row, column);
+    playAgainEl.addEventListener("click", () => {
+        console.log("Play Again");
+
+        scoreEl.innerHTML = `
+            <span>0</span>
+                -
+            <span>0</span>
+        `;
+
+        reactionTimeEl.innerHTML = "";
+        waitingEl.classList.remove("hide");
+        endGameEl.classList.add("hide");
+        socket.emit("game:restart", session, socket.id);
+    })
 })
 
- socket.on('room:point', (username, userpoint, time) => {
-	addNoticeToChat(`Damage done from ${username} in ${userpoint}`);
- 	addPoints(username, userpoint, time);
- })
+socket.on("game:restarted", (session) => {
+    renderGame(session)
+})
 
- // listen for incoming messages
- socket.on('chat:message', message => {
- 	console.log("Someone said something:", message);
+usernameFormEl.addEventListener("submit", e => {
+    e.preventDefault();
 
-	addMessageToChat(message);
- });
+    username = usernameFormEl.username.value;
 
-// get username and room from form and emit `user:joined` and then show chat
-usernameForm.addEventListener('submit', e => {
-	e.preventDefault();
+    socket.emit("user:joined", username, (status) => {
+        console.log("Server responded with", status);
 
-	room = usernameForm.room.value;
-	username = usernameForm.username.value;
+        if (status.success) {
+            startEl.classList.add("hide");
 
-	console.log(`User ${username} wants to join room '${room}'s`);
-
-	// emit `user:joined` event and when we get acknowledgement, THEN show the chat
-	socket.emit('user:joined', username, room, (status) => {
-		
-		// we've received acknowledgement from the server
-		console.log("Server acknowledged that user joined", status);
-
-		if (status.success) {
-			
-			// // // hide start view
-			startEl.classList.add('hide');
-
-
-			// show chat view
-			chatWrapperEl.classList.remove('hide');
-
-			
-
-			// set room name as chat title chat-title
-			document.querySelector('#room').innerText = status.roomName;
-
-			
-
-			// focus on inputMessage
-			messageEl.focus();
-
-			// update list of users in room
-			updateUserList(status.users);
-
-			if (!status.start) {
+            if (!status.start) {
                 waitingEl.classList.remove("hide");
             } 
-
-			
-		}
-	});
+        }
+    });
 });
-
-// send message to server
-messageForm.addEventListener('submit', e => {
-	e.preventDefault();
-
-	if (!messageEl.value) {
-		return;
-	}
-
-	const msg = {
-		username,
-		room,
-		content: messageEl.value,
-		timestamp: Date.now(),
-	}
-
-	// send message to server
-	socket.emit('chat:message', msg);
-
-	// add message to chat
-	addMessageToChat(msg, true);
-
-	// clear message input element and focus
-	messageEl.value = '';
-	messageEl.focus();
-});
-
-
-
- "use strict";  
- //const socket = io();
- const container = document.querySelector(".container");
- const users = document.querySelector(".users");
- // const usersScore = document.querySelector(".usersCore")
-
- const virus = document.createElement("img");
- virus.setAttribute("id", "virus-icon");
- virus.setAttribute('style', `grid-column-start: ${8}; grid-row-start: ${8}`)
- virus.setAttribute("src", "assets/icons/corona-virus.svg");
- container.appendChild(virus);
-
-
-
-const changeVirusPosition = (row, column) => {
-	 virus.style.gridColumnStart = column;
-	 virus.style.gridRowStart = row;
-   }
-
- 
- 
- let clickedTime, createdTime, reactionTime;
- 
- makeVirus = (row, column) => {
-   let time = Math.random();
-   time=time*5000;
-   
-   setTimeout(function() {
-	 if (Math.random() > 0.5) {
-	   document.getElementById("virus-icon").style.borderRadius="100px";
-	 } else {
-	   document.getElementById("virus-icon").style.borderRadius="0";
-	 }
-	 
-	 let top=Math.random();
-	 top=top*300;
-	 
-	 let left=Math.random();
-	 left=left*500;
-	 
-	 changeVirusPosition(row, column);
-	 
-	 document.getElementById("virus-icon").style.display = "block";
-	 createdTime = Date.now();
-   }, time);
- }
-
- document.getElementById("virus-icon").onclick = function() {
-   clickedTime = Date.now();
-   reactionTime = (clickedTime-createdTime)/1000;
-   document.getElementById("time").innerHTML = reactionTime;
-	 this.style.display = "none";
-	 socket.emit('user:fire', username, room, reactionTime);
- }
-
-
- 
- 
- makeVirus(2,2);
-
-//  let userScore = 10;
-//  let computerScore = 10;
-// let userPoint = 0
-
-
-//  function endGame() {
-//     if (userPoint === 10) {
-//         console.log("Game Over! You Win! :)");
-//     } 
-// }
-
-// function game() {
-    
-//     if(userPoint < 10){
-//     	game();
-//     }
-//     else{
-//     	endGame();
-//     }
-// }
-
-
-// game();
-
-
-
-
-
-
-
