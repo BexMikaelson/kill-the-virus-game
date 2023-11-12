@@ -1,189 +1,269 @@
-/***
- *
- * Socket Controller
- */
+const debug = require('debug')('chat:socket_controller');
 
-const debug = require("debug")("game:socket_controller");
-let io = null; // socket.io server instance
+let io = null;
 
-// list of rooms and their connected users
-const users = {};
-const rooms = [
-  {
-    id: "room1",
-    name: "Room one",
-    users: {},
-  },
-  {
-    id: "room2",
-    name: "Room two",
-    users: {},
-  },
-  {
-    id: "room3",
-    name: "Room three",
-    users: {},
-  },
-  {
-    id: "room4",
-    name: "Room four",
-    users: {},
-  },
-];
+let sessions = [];
 
- 
+let playerDisconnected;
+let thisSession = false;
 
+const handleDisconnect = function() {
+	debug(`Client ${this.id} disconnected :(`);
 
+	if (sessions.find(s => s.player1 === this.id)) {
+		thisSession = sessions.find(s => s.player1 === this.id);
+		playerDisconnected = thisSession.player1Name;
+		thisSession.player1 = "";
+		console.log("player 1 disconnected in", thisSession);
 
+		if (thisSession.player2 === "") {
+			sessions = sessions.filter(s => s.id !== thisSession.id);
+			console.log("sessions", sessions);
+		}
+	}
 
-const handleDisconnect = function () {
-  debug(`Client ${this.id} disconnected :(`);
+	if (sessions.find(s => s.player2 === this.id)) {
+		thisSession = sessions.find(s => s.player2 === this.id);
+		playerDisconnected = thisSession.player2Name;
+		thisSession.player2 = "";
+		console.log("player 2 disconnected in", thisSession);
 
-  // find the room that this socket is part of
-  const room = rooms.find((chatroom) => chatroom.users.hasOwnProperty(this.id));
+		if (thisSession.player1 === "") {
+			sessions = sessions.filter(s => s.id !== thisSession.id);
+			console.log("sessions", sessions);
+		}
+	}
 
-  // if socket was not in a room, don't broadcast disconnect
-  if (!room) {
-    return;
-  }
+	if (thisSession.id) {
+		io.in(thisSession.id).emit("user:disconnect", playerDisconnected)
+	}
+}
 
-  // let everyone in the room know that this user has disconnected
-  this.broadcast.to(room.id).emit("user:disconnected", room.users[this.id]);
+const createSession = function(socket, username) {
+	let sessionToJoin = null;
 
-  // remove user from list of users in that room
-  delete room.users[this.id];
+	let startGame = false;
 
-  // broadcast list of users in room to all connected sockets EXCEPT ourselves
-  this.broadcast.to(room.id).emit("user:list", room.users);
-};
+	if (sessions.length < 1) {
+		sessions.push({
+			id: socket.id,
+			player1Name: username,
+			player1: socket.id,
+			player2Name: "",
+			player2: "",
+			full: false,
+			player1Wins: 0,
+			player2Wins: 0,
+			rounds: 0,
+		})
+		sessionToJoin = socket.id;
+	} else {
+		sessions.map(session => {
+			if (session.full === false) {
+				session.player2Name = username;
+				session.player2 = socket.id;
+				session.full = true;
+				sessionToJoin = session.id;
+				startGame = true;
+			}
+		})
 
-// Handle when a user has joined the chat
-const handleUserJoined = function (username, room_id, callback) {
-  debug(
-    `User ${username} with socket id ${this.id} wants to join room '${room_id}'`
-  );
+		if (!startGame) {
+			sessions.push({
+				id: socket.id,
+				player1Name: username,
+				player2Name: "",
+				player2: "",
+				full: false,
+				player1Wins: 0,
+				player2Wins: 0,
+				rounds: 0,
+			})
+			sessionToJoin = socket.id;
+		}
+	}
 
-  // join room
-  this.join(room_id);
+	debug(sessions);
 
-  // add socket to list of online users in this room
-  // a) find room object with `id` === `general`
-  const room = rooms.find((chatroom) => chatroom.id === room_id);
+	socket.join(sessionToJoin);
 
-  // b) add socket to room's `users` object
-  room.users[this.id] = username;
+	debug(`User ${username} joined session ${sessionToJoin}`);
 
-  
+	io.in(sessionToJoin).emit("user:session", username, sessionToJoin, startGame);
 
-  // let everyone know that someone has connected to the chat
-  this.broadcast.to(room.id).emit("user:connected", username);
+	return {
+		start: startGame,
+		session: sessionToJoin,
+		player: socket.id,
+	}
+}
 
-  // confirm join
-  callback({
-    success: true,
-    roomName: room.name,
-    users: room.users,
-  });
+const handleUserJoined = function(username, callback) {
 
-  // broadcast list of users in room to all connected sockets EXCEPT ourselves
-  this.broadcast.to(room.id).emit("user:list", room.users);
-};
+	const startGame = createSession(this, username);
 
-// Handle when a user has joined the chat
-const handleUserFire = function (username, room_id, time) {
-   debug(`User ${username} with socket id ${this.id} wants to join room '${room_id}'`);
-  function randomColumnRow() {
-    return Math.ceil(Math.random() * 8);
-  }
+	debug(`User ${username} with socket id ${this.id} joined`);
 
-  const row = randomColumnRow();
-  const column = randomColumnRow();
+	this.broadcast.emit("user:connected", username);
 
-  const room = rooms.find((rom) => rom.id === room_id);
+	callback({
+		success: true,
+		start: startGame.start,
+		session: startGame.session,
+		player: startGame.player,
+	})
+}
 
-  if (!room.points) {
-    room.points = [];
-  }
-  const currentPoint = {
-    username: username,
-    point: 1,
+let player1Here = false;
+let player2Here = false;
+
+const handleGame = function(session, player) {
+	const thisSession = sessions.find(s => s.id === session)
+
+	if (thisSession.player1 === player) {
+		player1Here = true;
+		console.log("Player 1", player1Here);
+	} 
+
+	if (thisSession.player2 === player) {
+		player2Here = true;
+		console.log("Player 2", player2Here);
+	}
+
+	if (!player1Here && player2Here || player1Here && !player2Here) {
+		return;
+	}
+
+	const y = Math.floor(Math.random() * 10) + 1;
+	const x = Math.floor(Math.random() * 15) + 1;
+
+	const time = Math.floor(Math.random() * 4000) + 1;
+
+	const data = {
+		success: true,
+		session,
+		y: y,
+		x: x,
 		time: time,
-  };
+	}
 
-  room.points.push(currentPoint);
-  console.log('ROOMS:');
-  console.log({ rooms });
+	player1Here = false;
+	player2Here = false;
 
-	let userpoint = 0;
-  room.points.forEach((eachPoint) => {
-    if (username === eachPoint.username) {
-      userpoint = userpoint + eachPoint.point;
-    }
+	io.in(session).emit("game:success", data);
+}
 
-    // broadcast list of users in room to all connected sockets EXCEPT ourselves
+let compareReaction;
+let winner;
+let keepRunning;
+let player1Reaction;
+let player2Reaction;
 
-    //this.broadcast.to(room.id).emit('room:point', username);
+const handleGamePoint = function(reactionTime, player, session) {
+	const thisSession = sessions.find(s => s.id === session);
 
-    console.log({userpoint});
-  });
+	if (thisSession.player1 === player) {
+		player1Here = true;
+		console.log("player1 game point")
+		
+	} 
 
-  //  { --> Room
-  // 	id: 'room1',
-  // 	name: 'Room one',
-  // 	users: {
-  // 		gsg2NtXO0QOuDnPwAAAF: 'Heidi',
-  // 		yZk0ubEbX_hP72jmAAAH: 'daniel'
-  // 	}
-  // }
+	if (thisSession.player2 === player) {
+		player2Here = true;
+		console.log("player2 game point");
+	}
 
-  // console.log({ room, username, time });
-  io.to(room.id).emit("damageDone", username, time, row, column);
-  io.to(room.id).emit("room:point", username, userpoint, time);
-};
+	if (!player1Here && player2Here || player1Here && !player2Here) {
+		compareReaction = {
+			reactionTime,
+			player,
+		}
+		return;
+	}
 
-// Test Randomize makes virus jump all the time
-// const randomize = function (username, room_id, time) {
-//   function randomColumnRow() {
-//     return Math.ceil(Math.random() * 8);
-//   }
-//   const row = randomColumnRow();
-//   const column = randomColumnRow();
-//   io.to('room1').emit("room:randomize", row, column);
-//   io.to('room2').emit("room:randomize", row, column);
-// };
+	thisSession.player1 === compareReaction.player ? player1Reaction = compareReaction.reactionTime : player2Reaction = compareReaction.reactionTime;
 
-const handleChatMessage = function (message) {
-  debug("Someone said something: ", message);
+	thisSession.player1 === player ? player1Reaction = reactionTime : player2Reaction = reactionTime;
 
-  // emit `chat:message` event to everyone EXCEPT the sender
-  this.broadcast.to(message.room).emit("chat:message", message);
-};
+	thisSession.rounds++;
 
-module.exports = function (socket, _io) {
-  io = _io;
+	compareReaction.reactionTime > reactionTime ? winner = player : winner = compareReaction.player;
 
-  debug("a new client has connected", socket.id);
+	thisSession.player1 === winner ? thisSession.player1Wins++ : thisSession.player2Wins++;
 
-  io.emit("new-connection", "A new user connected");
+	if (thisSession.rounds === 10) {
+		keepRunning = false;
+	} else {
+		keepRunning = true;
+	}
 
-  io.emit("new-connection", "A new user connected");
+	const points = {
+		player1Name: thisSession.player1Name,
+		player1: thisSession.player1,
+		player1Points: thisSession.player1Wins,
+		player1React: player1Reaction,
+		player2Name: thisSession.player2Name,
+		player2: thisSession.player2,
+		player2Points: thisSession.player2Wins,
+		player2React: player2Reaction,
+	}
 
-  // io.to(room).emit();
-  socket.on("user:fire", handleUserFire);
+	player1Here = false;
+	player2Here = false;
 
-  // handle user disconnect
-  socket.on("disconnect", handleDisconnect);
+	io.in(session).emit("game:result", winner, points, keepRunning, session);
+}
 
-  // handle user joined
-  socket.on("user:joined", handleUserJoined);
+let winnerGame;
+const handleGameOver = function(session) {
+	const thisSession = sessions.find(s => s.id === session);
 
-  // handle user emitting a new message
-  socket.on("chat:message", handleChatMessage);
+	if (thisSession.player1Wins > thisSession.player2Wins) {
+		winnerGame = thisSession.player1;
+	} else {
+		winnerGame = thisSession.player2;
+	}
 
+	io.in(session).emit("game:endresult", winnerGame, session);
+}
 
-	// test  Randomize makes virus jump all the time controles the time
-	// const speedToMakeVirus = 6000;
-	// setInterval(() => {
-	// 	randomize()
-	// }, speedToMakeVirus)
-};
+const handleGameRestart = function(session, player) {
+	const thisSession = sessions.find(s => s.id === session);
+	
+	if (thisSession.player1 === player) {
+		player1Here = true;
+	}
+
+	if (thisSession.player2 === player) {
+		player2Here = true;
+	}
+
+	if (!player1Here && player2Here || player1Here && !player2Here) {
+		return;
+	}
+
+	thisSession.player1Wins = 0;
+	thisSession.player2Wins = 0;
+	thisSession.rounds = 0;
+
+	player1Here = false;
+	player2Here = false;
+
+	io.in(session).emit("game:restarted", session);
+}
+
+module.exports = function(socket, _io) {
+	io = _io;
+
+	socket.on("disconnect", handleDisconnect);
+
+	socket.on("user:joined", handleUserJoined);
+
+	socket.on("user:startgame", handleGame);
+
+	socket.on("game:point", handleGamePoint);
+
+	socket.on("game:end", handleGameOver);
+
+	socket.on("game:restart", handleGameRestart);	
+}
